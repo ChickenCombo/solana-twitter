@@ -2,6 +2,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { SolanaTwitter } from "../target/types/solana_twitter";
 import * as assert from "assert";
+import * as bs58 from "bs58";
 
 describe("solana-twitter", () => {
   // Configure the client to use the local cluster.
@@ -145,6 +146,52 @@ describe("solana-twitter", () => {
 
     assert.fail(
       "The instruction should have failed with a 281-character content."
+    );
+  });
+
+  it("can fetch all tweets", async () => {
+    const tweetAccount = await program.account.tweet.all();
+    assert.equal(tweetAccount.length, 3);
+  });
+
+  it("can filter tweets by author", async () => {
+    const anchorProvider = program.provider as anchor.AnchorProvider;
+
+    const tweetAccount = await program.account.tweet.all([
+      {
+        memcmp: {
+          offset: 8,
+          bytes: anchorProvider.publicKey.toBase58(),
+        },
+      },
+    ]);
+
+    assert.equal(tweetAccount.length, 2);
+    assert.ok(
+      tweetAccount.every((tweetAccount) => {
+        return (
+          tweetAccount.account.author.toBase58() ===
+          anchorProvider.publicKey.toBase58()
+        );
+      })
+    );
+  });
+
+  it("can filter tweets by topic", async () => {
+    const tweetAccount = await program.account.tweet.all([
+      {
+        memcmp: {
+          offset: 8 + 32 + 8 + 4,
+          bytes: bs58.encode(Buffer.from("veganism")),
+        },
+      },
+    ]);
+
+    assert.equal(tweetAccount.length, 2);
+    assert.ok(
+      tweetAccount.every((tweetAccount) => {
+        return tweetAccount.account.topic === "veganism";
+      })
     );
   });
 });
